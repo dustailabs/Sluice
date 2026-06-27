@@ -1,0 +1,138 @@
+{
+  "name": "Sluice — Lead Enrichment",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "new-lead",
+        "options": {}
+      },
+      "id": "b2d2c2f0-0001-4a00-9000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "lead-enrichment-webhook"
+    },
+    {
+      "parameters": {
+        "model": "claude-sonnet-4-6",
+        "systemPrompt": "You enrich inbound leads for a B2B SaaS consultancy. Infer company size band and industry from the message and email domain, and score buying intent from 1 (low) to 10 (ready to buy). Be conservative with intent scores — only score above 7 if there's a clear, stated need and timeline.",
+        "userPrompt": "={{ \"Name: \" + $json.body.name + \"\\nEmail: \" + $json.body.email + \"\\nCompany: \" + $json.body.company + \"\\nMessage: \" + $json.body.message }}",
+        "jsonSchema": "{\n  \"type\": \"object\",\n  \"required\": [\"industry\", \"companySizeBand\", \"intentScore\", \"reasoning\"],\n  \"properties\": {\n    \"industry\": { \"type\": \"string\" },\n    \"companySizeBand\": { \"type\": \"string\", \"enum\": [\"1-10\", \"11-50\", \"51-200\", \"201-1000\", \"1000+\", \"unknown\"] },\n    \"intentScore\": { \"type\": \"integer\", \"minimum\": 1, \"maximum\": 10 },\n    \"reasoning\": { \"type\": \"string\", \"description\": \"One sentence justifying the intent score.\" }\n  }\n}",
+        "maxRetries": 2,
+        "maxTokens": 512
+      },
+      "id": "b2d2c2f0-0002-4a00-9000-000000000002",
+      "name": "Enrich Lead",
+      "type": "n8n-nodes-sluice.claudeStructured",
+      "typeVersion": 1,
+      "position": [460, 300],
+      "credentials": {
+        "anthropicApi": { "id": "1", "name": "Anthropic API (Dust AI Labs)" }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            { "name": "name", "type": "stringValue" },
+            { "name": "email", "type": "stringValue" },
+            { "name": "company", "type": "stringValue" },
+            { "name": "industry", "type": "stringValue" },
+            { "name": "companySizeBand", "type": "stringValue" },
+            { "name": "intentScore", "type": "numberValue" }
+          ]
+        }
+      },
+      "id": "b2d2c2f0-0003-4a00-9000-000000000003",
+      "name": "Shape CRM Record",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [680, 300],
+      "notes": "Map the enriched fields into whatever shape your CRM's API expects before the HTTP Request node below."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://your-crm.example.com/api/leads",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "name", "value": "={{$json.name}}" },
+            { "name": "email", "value": "={{$json.email}}" },
+            { "name": "company", "value": "={{$json.company}}" },
+            { "name": "industry", "value": "={{$json.industry}}" },
+            { "name": "company_size_band", "value": "={{$json.companySizeBand}}" },
+            { "name": "intent_score", "value": "={{$json.intentScore}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b2d2c2f0-0004-4a00-9000-000000000004",
+      "name": "Upsert to CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300],
+      "notes": "Placeholder endpoint — point this at your actual CRM (HubSpot, Salesforce, Pipedrive, etc.) or swap for the matching n8n connector node."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "leftValue": "={{$json.intentScore}}",
+              "rightValue": 7,
+              "operator": { "type": "number", "operation": "gte" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b2d2c2f0-0005-4a00-9000-000000000005",
+      "name": "High Intent?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": { "mode": "name", "value": "#hot-leads" },
+        "text": "={{ \"🔥 Intent \" + $json.intentScore + \"/10 — \" + $json.company + \" (\" + $json.industry + \", \" + $json.companySizeBand + \"): \" + $json.email }}",
+        "otherOptions": {}
+      },
+      "id": "b2d2c2f0-0006-4a00-9000-000000000006",
+      "name": "Notify #hot-leads",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1340, 200],
+      "credentials": {
+        "slackApi": { "id": "2", "name": "Slack (Dust AI Labs)" }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Enrich Lead", "type": "main", "index": 0 }]]
+    },
+    "Enrich Lead": {
+      "main": [[{ "node": "Shape CRM Record", "type": "main", "index": 0 }]]
+    },
+    "Shape CRM Record": {
+      "main": [[{ "node": "Upsert to CRM", "type": "main", "index": 0 }]]
+    },
+    "Upsert to CRM": {
+      "main": [[{ "node": "High Intent?", "type": "main", "index": 0 }]]
+    },
+    "High Intent?": {
+      "main": [[{ "node": "Notify #hot-leads", "type": "main", "index": 0 }], []]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}

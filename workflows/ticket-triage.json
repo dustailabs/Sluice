@@ -1,0 +1,120 @@
+{
+  "name": "Sluice — Support Ticket Triage",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ticket-triage",
+        "options": {}
+      },
+      "id": "a1d1b1e0-0001-4a00-9000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "ticket-triage-webhook"
+    },
+    {
+      "parameters": {
+        "model": "claude-sonnet-4-6",
+        "systemPrompt": "You triage support tickets. Classify the ticket and assign a priority from 1 (low) to 5 (urgent, e.g. outage or billing error affecting access).",
+        "userPrompt": "={{ \"Subject: \" + $json.body.subject + \"\\n\\n\" + $json.body.message }}",
+        "jsonSchema": "{\n  \"type\": \"object\",\n  \"required\": [\"category\", \"priority\", \"summary\"],\n  \"properties\": {\n    \"category\": { \"type\": \"string\", \"enum\": [\"billing\", \"technical\", \"account\", \"general\"] },\n    \"priority\": { \"type\": \"integer\", \"minimum\": 1, \"maximum\": 5 },\n    \"summary\": { \"type\": \"string\", \"description\": \"One-sentence summary for the assignee.\" }\n  }\n}",
+        "maxRetries": 2,
+        "maxTokens": 512
+      },
+      "id": "a1d1b1e0-0002-4a00-9000-000000000002",
+      "name": "Classify Ticket",
+      "type": "n8n-nodes-sluice.claudeStructured",
+      "typeVersion": 1,
+      "position": [460, 300],
+      "credentials": {
+        "anthropicApi": { "id": "1", "name": "Anthropic API (Dust AI Labs)" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "leftValue": "={{$json.output.priority}}",
+              "rightValue": 4,
+              "operator": { "type": "number", "operation": "gte" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1d1b1e0-0003-4a00-9000-000000000003",
+      "name": "Priority >= 4?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": { "mode": "name", "value": "#urgent-tickets" },
+        "text": "={{ \"🚨 [\" + $json.output.category + \"] P\" + $json.output.priority + \" — \" + $json.output.summary }}",
+        "otherOptions": {}
+      },
+      "id": "a1d1b1e0-0004-4a00-9000-000000000004",
+      "name": "Notify #urgent-tickets",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [900, 200],
+      "credentials": {
+        "slackApi": { "id": "2", "name": "Slack (Dust AI Labs)" }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": { "mode": "name", "value": "#support-queue" },
+        "text": "={{ \"[\" + $json.output.category + \"] P\" + $json.output.priority + \" — \" + $json.output.summary }}",
+        "otherOptions": {}
+      },
+      "id": "a1d1b1e0-0005-4a00-9000-000000000005",
+      "name": "Notify #support-queue",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [900, 400],
+      "credentials": {
+        "slackApi": { "id": "2", "name": "Slack (Dust AI Labs)" }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"failed_validation\", \"errors\": $json.validationErrors } }}"
+      },
+      "id": "a1d1b1e0-0006-4a00-9000-000000000006",
+      "name": "Respond: Needs Manual Review",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [460, 480]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Classify Ticket", "type": "main", "index": 0 }]]
+    },
+    "Classify Ticket": {
+      "main": [
+        [{ "node": "Priority >= 4?", "type": "main", "index": 0 }],
+        [{ "node": "Respond: Needs Manual Review", "type": "main", "index": 0 }]
+      ]
+    },
+    "Priority >= 4?": {
+      "main": [
+        [{ "node": "Notify #urgent-tickets", "type": "main", "index": 0 }],
+        [{ "node": "Notify #support-queue", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}

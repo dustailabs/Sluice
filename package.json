@@ -1,0 +1,50 @@
+{
+  "name": "n8n-nodes-sluice",
+  "version": "0.1.0",
+  "description": "n8n community node: call Claude for structured extraction/classification with JSON-schema validation, automatic retries on bad output, and a separate error output for anything that never validates.",
+  "keywords": [
+    "n8n-community-node-package",
+    "claude",
+    "anthropic",
+    "llm",
+    "automation"
+  ],
+  "license": "MIT",
+  "author": "Dust AI Labs <dustailabs@proton.me>",
+  "homepage": "https://github.com/dustailabs/Sluice",
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [
+      "dist/credentials/AnthropicApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/ClaudeStructured/ClaudeStructured.node.js"
+    ]
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-assets.js",
+    "dev": "tsc --watch",
+    "test": "jest",
+    "lint": "eslint nodes credentials --ext .ts"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "n8n-workflow": "^1.60.0",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.4.0"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  },
+  "dependencies": {
+    "ajv": "^8.12.0"
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "name": "Sluice — Content Repurposing",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "repurpose-content",
+        "options": {}
+      },
+      "id": "c3e3d3a0-0001-4a00-9000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "content-repurposing-webhook"
+    },
+    {
+      "parameters": {
+        "model": "claude-sonnet-4-6",
+        "systemPrompt": "You repurpose long-form content (blog posts, changelogs, case studies) into social copy. Stay factual to the source — never invent statistics, quotes, or claims not present in the input. Each tweet variant must stand alone and fit in 280 characters.",
+        "userPrompt": "={{$json.body.content}}",
+        "jsonSchema": "{\n  \"type\": \"object\",\n  \"required\": [\"title\", \"summary\", \"tweetVariants\", \"linkedinPost\"],\n  \"properties\": {\n    \"title\": { \"type\": \"string\" },\n    \"summary\": { \"type\": \"string\", \"maxLength\": 400 },\n    \"tweetVariants\": {\n      \"type\": \"array\",\n      \"minItems\": 3,\n      \"maxItems\": 3,\n      \"items\": { \"type\": \"string\", \"maxLength\": 280 }\n    },\n    \"linkedinPost\": { \"type\": \"string\", \"maxLength\": 1200 }\n  }\n}",
+        "maxRetries": 2,
+        "maxTokens": 1024
+      },
+      "id": "c3e3d3a0-0002-4a00-9000-000000000002",
+      "name": "Repurpose Content",
+      "type": "n8n-nodes-sluice.claudeStructured",
+      "typeVersion": 1,
+      "position": [460, 300],
+      "credentials": {
+        "anthropicApi": { "id": "1", "name": "Anthropic API (Dust AI Labs)" }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "output.tweetVariants",
+        "options": {}
+      },
+      "id": "c3e3d3a0-0003-4a00-9000-000000000003",
+      "name": "Split Tweet Variants",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [680, 220]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.output }}"
+      },
+      "id": "c3e3d3a0-0004-4a00-9000-000000000004",
+      "name": "Respond with Repurposed Copy",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [680, 400]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Repurpose Content", "type": "main", "index": 0 }]]
+    },
+    "Repurpose Content": {
+      "main": [
+        [
+          { "node": "Split Tweet Variants", "type": "main", "index": 0 },
+          { "node": "Respond with Repurposed Copy", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}
